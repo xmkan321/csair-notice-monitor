@@ -47,13 +47,15 @@ def now_str():
 
 
 # ========== 飞书通知 ==========
-def send_feishu(content, is_alert=False):
-    """发送飞书消息"""
+def send_feishu(content, msg_type="new"):
+    """发送飞书消息
+    msg_type: new=新公告(蓝色), ok=无新公告(绿色), alert=异常(红色)
+    """
     if not FEISHU_WEBHOOK:
         print("[WARN] FEISHU_WEBHOOK 未配置，跳过发送")
         return False
 
-    if is_alert:
+    if msg_type == "alert":
         # 告警消息 - 红色卡片
         card = {
             "msg_type": "interactive",
@@ -65,6 +67,21 @@ def send_feishu(content, is_alert=False):
                 "elements": [
                     {"tag": "div", "text": {"tag": "lark_md", "content": content}},
                     {"tag": "note", "elements": [{"tag": "plain_text", "content": f"时间：{now_str()}"}]},
+                ],
+            },
+        }
+    elif msg_type == "ok":
+        # 无新公告心跳 - 绿色卡片
+        card = {
+            "msg_type": "interactive",
+            "card": {
+                "header": {
+                    "title": {"tag": "plain_text", "content": "✅ 检查完成，暂无新公告"},
+                    "template": "green",
+                },
+                "elements": [
+                    {"tag": "div", "text": {"tag": "lark_md", "content": content}},
+                    {"tag": "note", "elements": [{"tag": "plain_text", "content": f"检测时间：{now_str()}"}]},
                 ],
             },
         }
@@ -178,10 +195,15 @@ def check_and_notify():
             if link:
                 content += f"\n[👉 点击查看公告]({link})"
 
-            send_feishu(content, is_alert=False)
+            send_feishu(content, msg_type="new")
             time.sleep(1)  # 避免飞书限流
     else:
         print("[INFO] 没有新公告")
+        # 发送心跳消息，让用户知道程序正常运行
+        ok_content = f"已检查 {len(MONITOR_PAGES)} 个公告页面\n"
+        ok_content += f"已记录公告总数：{len(seen_ids)}\n"
+        ok_content += f"本次未发现新公告"
+        send_feishu(ok_content, msg_type="ok")
 
     # 更新状态
     state["seen_ids"] = seen_ids
@@ -215,7 +237,7 @@ def main():
     alert_msg += f"请检查网络连接或南航API是否正常"
 
     print(f"[ALERT] {alert_msg}")
-    send_feishu(alert_msg, is_alert=True)
+    send_feishu(alert_msg, msg_type="alert")
     print(f"[INFO] ========== 监控结束（失败） ==========")
 
 
